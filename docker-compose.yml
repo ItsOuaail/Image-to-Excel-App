@@ -8,13 +8,25 @@ services:
     container_name: laravel_app
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:80"
     depends_on:
       - db
-    env_file:
-      - ./backend/.env
+    environment:
+      - APP_NAME=Laravel
+      - APP_ENV=local
+      - APP_KEY=base64:TIzUGyoZEiyQbRvbffjX5OzWFXnyS0uW/vmOcCBS/bQ=
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:8000
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=db1
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=123
+      - VITE_APP_NAME=Laravel
     volumes:
-      - ./backend:/var/www/html
+      - ./storage/app:/var/www/html/storage/app
+      - ./storage/logs:/var/www/html/storage/logs
     networks:
       - laravel_network
 
