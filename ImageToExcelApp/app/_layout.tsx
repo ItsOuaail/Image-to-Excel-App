@@ -1,29 +1,20 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { AuthProvider } from '../hooks/useAuth.tsx'; // Make sure this is .tsx now
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+    <AuthProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Your welcome screen (index.tsx) */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+
+        {/* The (auth) group will handle its own navigation logic via app/(auth)/_layout.tsx */}
+        {/* You reference the group by its folder name */}
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+
+        {/* You'll later add a (main) group for authenticated screens */}
+        {/* <Stack.Screen name="(main)" options={{ headerShown: false }} /> */}
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </AuthProvider>
   );
 }
