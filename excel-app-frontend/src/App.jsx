@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Navigation from './components/Navigation';
 import ImageToExcel from './components/ImageToExcel';
@@ -20,10 +22,14 @@ function App() {
   };
 
   return (
-    <Layout>
-      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
-      {renderActiveComponent()}
-    </Layout>
+    <AuthProvider>
+      <ProtectedRoute>
+        <Layout>
+          <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          {renderActiveComponent()}
+        </Layout>
+      </ProtectedRoute>
+    </AuthProvider>
   );
 }
 
