@@ -85,7 +85,7 @@ export default function RegisterScreen() {
           style={styles.signUpButton}
         />
 
-        <TouchableOpacity onPress={() => router.replace('/auth/login')} style={styles.alreadyHaveAccount}>
+        <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.alreadyHaveAccount}>
           <Text style={GlobalStyles.subtitle}>
             Already have an account? <Text style={GlobalStyles.linkText}>Sign in</Text>
           </Text>

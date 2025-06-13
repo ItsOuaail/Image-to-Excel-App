@@ -3,30 +3,33 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, 
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
-import { GlobalStyles } from '../../styles/GlobalStyles';
+import { GlobalStyles }  from '../../styles/GlobalStyles';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../hooks/useAuth';
+// import { useAuth } from '../../hooks/useAuth'; // Nous allons désactiver l'importation de useAuth temporairement pour éviter des erreurs si non configuré
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  // const { login, isLoading } = useAuth(); // Désactiver ou commenter ceci pour le test temporaire
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // --- MODIFICATION ICI ---
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-      return;
-    }
-    try {
-      await login(email, password);
-      // Login successful, redirect to authenticated area
-      router.replace('/(main)/dashboard'); // Redirect to your main app screen
-    } catch (error: any) {
-      Alert.alert('Erreur de Connexion', error);
-    }
+    // Supprimez ou commentez la logique de validation et d'appel API pour le test rapide
+    // if (!email || !password) {
+    //   Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+    //   return;
+    // }
+    // try {
+    //   await login(email, password); // Ceci ne sera pas appelé
+    //   Alert.alert('Info', 'Connexion simulée réussie !'); // Message pour confirmer la simulation
+      router.replace('/(main)/dashboard'); // Redirige directement vers le tableau de bord
+    // } catch (error: any) {
+    //   Alert.alert('Erreur de Connexion', error);
+    // }
   };
+  // --- FIN DE LA MODIFICATION ---
 
   const handleForgotPassword = () => {
     Alert.alert('Mot de passe oublié', 'Fonctionnalité à implémenter.');
@@ -67,11 +70,11 @@ export default function LoginScreen() {
         <CustomButton
           title="Sign in"
           onPress={handleLogin}
-          loading={isLoading}
+          // loading={isLoading} // Commentez ou supprimez cette prop car isLoading n'est pas utilisé
           style={styles.signInButton}
         />
 
-        <TouchableOpacity onPress={() => router.push('/auth/register')} style={styles.createAccount}>
+        <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={styles.createAccount}>
           <Text style={GlobalStyles.subtitle}>
             Create new account? <Text style={GlobalStyles.linkText}>Sign up</Text>
           </Text>
@@ -82,7 +85,7 @@ export default function LoginScreen() {
         <SocialSignInButtons
           onGooglePress={handleGoogleSignIn}
           onApplePress={handleAppleSignIn}
-          onFacebookPress={() => {}} // Placeholder if you add Facebook
+          onFacebookPress={() => {}}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -96,7 +99,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 25,
     backgroundColor: '#fff',
-    paddingVertical: 50, // Added padding for scrollview
+    paddingVertical: 50,
   },
   headerTitle: {
     ...GlobalStyles.title,
@@ -107,10 +110,10 @@ const styles = StyleSheet.create({
     ...GlobalStyles.subtitle,
     fontSize: 16,
     marginBottom: 40,
-    paddingHorizontal: 0, // Remove padding from global subtitle
+    paddingHorizontal: 0,
   },
   inputSpacing: {
-    marginBottom: 20, // Add more space between inputs
+    marginBottom: 20,
     width: '100%',
   },
   forgotPassword: {
