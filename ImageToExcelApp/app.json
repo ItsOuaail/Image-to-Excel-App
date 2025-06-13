@@ -23,7 +23,11 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "extra": {
+      "API_BASE_URL": "http://your-laravel-backend-ip-or-domain/api"
+    },
     "plugins": [
+
       "expo-router",
       [
         "expo-splash-screen",
