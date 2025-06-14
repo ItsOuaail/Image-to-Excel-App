@@ -1,22 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import CustomButton from '../components/CustomButton';
 import { GlobalStyles } from '../styles/GlobalStyles';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../hooks/useAuth.tsx'; // Assurez-vous que c'est .tsx
+import { useAuth } from '../hooks/useAuth';
 
 const { width } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuth(); // Correction de la typo "isLoatding"
 
-  // Si l'utilisateur est déjà connecté et que le chargement initial est terminé,
-  // rediriger vers le tableau de bord principal.
-  if (!isLoading && user) {
-    router.replace('/(main)/dashboard');
-    return null; // ou un composant de chargement simple si la redirection prend du temps
-  }
+  // Effet pour gérer la redirection après login réussi
+  useEffect(() => {
+    // Si l'utilisateur est connecté et que le chargement est terminé
+    if (!isLoading && user) {
+      console.log('Utilisateur connecté, redirection vers dashboard...');
+      // Utilise replace pour éviter que l'utilisateur puisse revenir en arrière
+      router.replace('/(dash)');
+    }
+  }, [user, isLoading, router]);
 
   // Si l'application est en cours de chargement (vérification du token, etc.)
   if (isLoading) {
@@ -24,13 +27,25 @@ export default function WelcomeScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={GlobalStyles.button.backgroundColor} />
         <Text style={styles.loadingText}>Chargement...</Text>
+        <Text style={styles.loadingSubText}>Vérification de la session...</Text>
       </View>
     );
   }
 
+  // Si l'utilisateur est connecté, on montre un loader pendant la redirection
+  if (user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={GlobalStyles.button.backgroundColor} />
+        <Text style={styles.loadingText}>Connexion réussie!</Text>
+        <Text style={styles.loadingSubText}>Redirection vers le dashboard...</Text>
+      </View>
+    );
+  }
+
+  // Interface de bienvenue pour les utilisateurs non connectés
   return (
     <View style={styles.container}>
-      {/* ... (rest of your existing WelcomeScreen content) ... */}
       <View style={styles.imageContainer}>
         <Image
           source={require('../assets/images/welcome_image.png')}
@@ -38,22 +53,41 @@ export default function WelcomeScreen() {
           resizeMode="contain"
         />
       </View>
-      <Text style={styles.title}>Convertis tes images en fichiers Excel, en un clic !</Text>
+      
+      <Text style={styles.title}>
+        Convertis tes images en fichiers Excel, en un clic !
+      </Text>
+      
       <Text style={styles.subtitle}>
         Automatise la saisie manuelle. Gagne du temps avec notre technologie OCR intelligente.
       </Text>
+      
       <View style={styles.buttonContainer}>
         <CustomButton
-          title="Login"
-          onPress={() => router.push('/(auth)/login')}
+          title="Connexion"
+          onPress={() => {
+            console.log('Navigation vers login...');
+            router.push('/(auth)/login');
+          }}
           style={styles.loginButton}
           textStyle={styles.loginButtonText}
         />
         <CustomButton
-          title="Register"
-          onPress={() => router.push('/(auth)/register')}
+          title="Inscription"
+          onPress={() => {
+            console.log('Navigation vers register...');
+            router.push('/(auth)/register');
+          }}
           style={styles.registerButton}
         />
+      </View>
+      
+      {/* Section informative supplémentaire */}
+      <View style={styles.featuresContainer}>
+        <Text style={styles.featuresTitle}>Fonctionnalités principales :</Text>
+        <Text style={styles.featureItem}>📸 Scan de tableaux intelligents</Text>
+        <Text style={styles.featureItem}>📊 Génération Excel automatique</Text>
+        <Text style={styles.featureItem}>🔍 Reconnaissance OCR avancée</Text>
       </View>
     </View>
   );
@@ -74,9 +108,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  loadingSubText: {
+    marginTop: 8,
+    fontSize: 14,
     color: '#666',
+    textAlign: 'center',
   },
   imageContainer: {
     width: '100%',
@@ -94,17 +135,21 @@ const styles = StyleSheet.create({
     fontSize: 26,
     marginBottom: 15,
     textAlign: 'center',
+    lineHeight: 32,
   },
   subtitle: {
     ...GlobalStyles.subtitle,
     fontSize: 15,
     marginBottom: 40,
     paddingHorizontal: 10,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   buttonContainer: {
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-around',
+    marginBottom: 30,
   },
   loginButton: {
     flex: 1,
@@ -119,5 +164,24 @@ const styles = StyleSheet.create({
   registerButton: {
     flex: 1,
     marginLeft: 10,
+  },
+  featuresContainer: {
+    alignItems: 'center',
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    width: '100%',
+  },
+  featuresTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  featureItem: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+    textAlign: 'center',
   },
 });
