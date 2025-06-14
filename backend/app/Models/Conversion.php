@@ -16,11 +16,13 @@ class Conversion extends Model
         'excel_path',
         'status',
         'extracted_data',
-        'error_message'
+        'error_message',
+        'template_id'
     ];
 
     protected $casts = [
-        'extracted_data' => 'array'
+        'template_id' => 'integer'  // Only cast template_id to integer
+        // Removed extracted_data casting - it should be plain text
     ];
 
     public function getImageUrlAttribute()
@@ -33,9 +35,13 @@ class Conversion extends Model
         return $this->excel_path ? asset('storage/' . $this->excel_path) : null;
     }
 
-    // Relationship with user
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+    
+    public function template()
+    {
+        return $this->belongsTo(ConversionTemplate::class, 'template_id');
     }
 }

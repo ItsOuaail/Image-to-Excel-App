@@ -4,79 +4,122 @@ namespace App\Jobs;
 
 use App\Models\Conversion;
 use App\Services\ExcelService;
-use App\Services\OcrService;
-use App\Services\TableParser;
 use Illuminate\Bus\Batchable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class ProcessConversion implements ShouldQueue
 {
     use InteractsWithQueue, SerializesModels, Batchable;
 
-    protected $conversionId; // Store only the ID of the conversion
+    protected $conversionId;
+    protected $tableData;
+    protected $rawText;
 
-    // Constructor to accept only the conversion ID
-    public function __construct($conversionId)
+    public function __construct($conversionId, $tableData, $rawText = null)
     {
         $this->conversionId = $conversionId;
+        $this->tableData = $tableData;
+        $this->rawText = $rawText;
     }
 
-    // Handle the job
-public function handle()
-{
-    try {
-        $conversion = Conversion::find($this->conversionId);
+    public function handle()
+    {
+        Log::info("🚀 TABLE JOB STARTED: Processing conversion ID {$this->conversionId}");
 
-        if (!$conversion) {
-            Log::error("Conversion with ID {$this->conversionId} not found.");
-            return;
+        try {
+            $conversion = Conversion::find($this->conversionId);
+
+            if (!$conversion) {
+                Log::error("❌ Conversion not found: {$this->conversionId}");
+                return;
+            }
+
+            Log::info("📊 Job received data:");
+            Log::info("   - Table rows: " . count($this->tableData));
+            Log::info("   - Table columns: " . (count($this->tableData) > 0 ? count($this->tableData[0]) : 0));
+            Log::info("   - Raw text length: " . strlen($this->rawText ?? ''));
+            Log::info("   - DB extracted_data length: " . strlen($conversion->extracted_data ?? ''));
+
+            // Use table data from job parameter (most reliable)
+            if (empty($this->tableData)) {
+                Log::error("❌ No table data provided to job");
+                $conversion->update([
+                    'status' => 'failed',
+                    'error_message' => 'No table data to process'
+                ]);
+                return;
+            }
+
+            // Validate table data structure
+            if (!is_array($this->tableData) || count($this->tableData) === 0) {
+                Log::error("❌ Invalid table data structure");
+                $conversion->update([
+                    'status' => 'failed',
+                    'error_message' => 'Invalid table data structure'
+                ]);
+                return;
+            }
+
+            Log::info("📊 Table data preview:");
+            for ($i = 0; $i < min(3, count($this->tableData)); $i++) {
+                Log::info("   Row {$i}: " . json_encode($this->tableData[$i]));
+            }
+
+            // Update status to processing
+            $conversion->update(['status' => 'processing']);
+
+            // Generate Excel directly from table data
+            Log::info("📊 Generating Excel file from table data...");
+            $excelService = new ExcelService();
+            $excelPath = $excelService->createExcel($this->tableData);
+
+            if (!$excelPath) {
+                Log::error("❌ Excel generation failed");
+                $conversion->update([
+                    'status' => 'failed',
+                    'error_message' => 'Failed to generate Excel file'
+                ]);
+                return;
+            }
+
+            // Verify the file was actually created
+            $fullExcelPath = storage_path('app/public/' . $excelPath);
+            if (!file_exists($fullExcelPath)) {
+                Log::error("❌ Excel file was not created at: " . $fullExcelPath);
+                $conversion->update([
+                    'status' => 'failed',
+                    'error_message' => 'Excel file was not created on disk'
+                ]);
+                return;
+            }
+
+            $fileSize = filesize($fullExcelPath);
+            Log::info("✅ Excel file created successfully:");
+            Log::info("   - Path: " . $excelPath);
+            Log::info("   - Full path: " . $fullExcelPath);
+            Log::info("   - File size: " . $fileSize . " bytes");
+
+            // Success!
+            $conversion->update([
+                'excel_path' => $excelPath,
+                'status' => 'completed'
+            ]);
+
+            Log::info("🎉 SUCCESS: Table conversion {$this->conversionId} completed");
+
+        } catch (\Exception $e) {
+            Log::error("💥 TABLE JOB FAILED: " . $e->getMessage());
+            Log::error("💥 Stack trace: " . $e->getTraceAsString());
+            
+            if (isset($conversion)) {
+                $conversion->update([
+                    'status' => 'failed',
+                    'error_message' => 'Processing error: ' . $e->getMessage()
+                ]);
+            }
         }
-
-        $ocrText = $conversion->extracted_data;
-
-        // Log OCR output for debugging
-        Log::info("OCR Text: " . print_r($ocrText, true)); // Log the extracted OCR text
-
-        // Check if the extracted data is empty
-        if (empty($ocrText)) {
-            Log::error("No OCR text found for conversion ID {$this->conversionId}");
-            return;  // Exit if no OCR text
-        }
-
-        // Process the OCR text and convert to table data
-        $table = (new TableParser())->parse($ocrText);
-
-        if (empty($table)) {
-            Log::error("No table data found for conversion ID {$this->conversionId}");
-            return;  // Exit if table parsing failed
-        }
-
-        // Generate the Excel file
-        $excelService = new ExcelService();
-        $excelPath = $excelService->createExcel($table);
-
-        // Check if the Excel file was created successfully
-        if (!$excelPath) {
-            Log::error("Failed to create Excel file for conversion ID {$this->conversionId}");
-            return;
-        }
-
-        // Update conversion record with the Excel file path
-        $conversion->update([
-            'excel_path' => $excelPath,
-            'status' => 'completed'
-        ]);
-
-        Log::info("Conversion for ID {$this->conversionId} completed successfully.");
-
-    } catch (\Exception $e) {
-        Log::error("Error processing conversion for ID {$this->conversionId}: " . $e->getMessage());
     }
-}
-
-
 }

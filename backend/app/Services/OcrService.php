@@ -2,75 +2,68 @@
 
 namespace App\Services;
 
-use thiagoalessio\TesseractOCR\TesseractOCR;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class OcrService
 {
+    private $apiKey = 'K81862857888957';
+    private $apiUrl = 'https://api.ocr.space/parse/image';
+
     public function extractText($imagePath)
     {
-        // Get full path to image in storage (public disk)
-        $fullPath = Storage::disk('public')->path($imagePath);
-
-        // Log the path for debugging
-        Log::info("OCR is processing the image at path: " . $fullPath);
-
         try {
-            // Check if the file exists at the specified path
+            $fullPath = Storage::disk('public')->path($imagePath);
+            
+            Log::info("🔍 OCR Debug: Processing image at: " . $fullPath);
+            
             if (!file_exists($fullPath)) {
-                Log::error("OCR Error: Image not found at path: " . $fullPath);
+                Log::error("❌ OCR Error: Image not found at path: " . $fullPath);
                 return [
                     'success' => false,
                     'error' => 'Image not found at the specified path.'
                 ];
             }
 
-            // Use Tesseract OCR with better settings for table detection
-            $ocr = new TesseractOCR($fullPath);
-            $ocr->executable('C:\Program Files\Tesseract-OCR\tesseract.exe');
-
-            // Better OCR settings for tables
-            $ocr->psm(6); // Uniform block of text
-            $ocr->oem(3); // Default OCR Engine Mode
+            // Check file size
+            $fileSize = filesize($fullPath);
+            Log::info("🔍 OCR Debug: File size: " . $fileSize . " bytes");
             
-            // Language setting (you can add more languages if needed)
-            $ocr->lang('eng');
-            
-            // Whitelist characters commonly found in tables
-            $ocr->allowlist('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,;:!?()-[]{}/@#$%&*+=_\'"\\|');
-            
-            // Try to preserve layout for tables
-            $ocr->config('preserve_interword_spaces', '1');
-            
-            // Run the OCR
-            $text = $ocr->run();
-
-            // Clean up the text
-            $text = $this->cleanOcrText($text);
-
-            // If OCR failed to extract meaningful text, return an error
-            if (empty($text) || $this->isGibberish($text)) {
-                Log::error("OCR Error: No meaningful text extracted from image.");
-                
-                // Try with different PSM modes as fallback
-                $fallbackText = $this->tryFallbackOcr($fullPath);
-                if ($fallbackText) {
-                    $text = $fallbackText;
-                } else {
-                    return [
-                        'success' => false,
-                        'error' => 'OCR extraction failed or returned gibberish text.'
-                    ];
-                }
+            if ($fileSize > 5 * 1024 * 1024) { // 5MB limit for OCR.space
+                Log::warning("⚠️ OCR Warning: File size exceeds 5MB limit");
             }
 
-            return [
-                'success' => true,
-                'text' => $text
-            ];
+            // Try multiple OCR engines and settings
+            $results = [];
+            
+            // Engine 1 (default)
+            $result1 = $this->tryOcrRequest($fullPath, basename($imagePath), ['OCREngine' => '1']);
+            if ($result1['success']) {
+                $results[] = ['engine' => 1, 'data' => $result1];
+            }
+            
+            // Engine 2 (often better for tables)
+            $result2 = $this->tryOcrRequest($fullPath, basename($imagePath), ['OCREngine' => '2']);
+            if ($result2['success']) {
+                $results[] = ['engine' => 2, 'data' => $result2];
+            }
+
+            // Choose the best result (longest text usually means better OCR)
+            if (empty($results)) {
+                return [
+                    'success' => false,
+                    'error' => 'All OCR engines failed to extract text'
+                ];
+            }
+
+            $bestResult = $this->chooseBestResult($results);
+            Log::info("✅ OCR Success: Using engine " . $bestResult['engine'] . " result");
+            
+            return $bestResult['data'];
+
         } catch (\Exception $e) {
-            Log::error("OCR Error: " . $e->getMessage());
+            Log::error("❌ OCR Exception: " . $e->getMessage());
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -78,91 +71,133 @@ class OcrService
         }
     }
 
-    /**
-     * Clean OCR text to remove noise
-     */
+    private function tryOcrRequest($fullPath, $filename, $extraParams = [])
+    {
+        try {
+            Log::info("🔄 Trying OCR with params: " . json_encode($extraParams));
+
+            $params = array_merge([
+                'apikey' => $this->apiKey,
+                'language' => 'eng',
+                'isOverlayRequired' => 'false',
+                'detectOrientation' => 'true',
+                'scale' => 'true'
+            ], $extraParams);
+
+            $response = Http::timeout(90) // Increased timeout
+                ->attach('file', file_get_contents($fullPath), $filename)
+                ->post($this->apiUrl, $params);
+
+            Log::info("🔍 OCR API response status: " . $response->status());
+
+            if (!$response->successful()) {
+                Log::error("❌ OCR API Error: " . $response->body());
+                return [
+                    'success' => false,
+                    'error' => 'API request failed: ' . $response->status()
+                ];
+            }
+
+            $result = $response->json();
+            Log::info("🔍 OCR Raw Response: " . json_encode($result, JSON_PRETTY_PRINT));
+            
+            // Check for processing errors
+            if (isset($result['IsErroredOnProcessing']) && $result['IsErroredOnProcessing']) {
+                $errorMessages = $result['ErrorMessage'] ?? ['Unknown error'];
+                if (is_array($errorMessages)) {
+                    $errorMessage = implode(', ', $errorMessages);
+                } else {
+                    $errorMessage = $errorMessages;
+                }
+                Log::error("❌ OCR Processing Error: " . $errorMessage);
+                return [
+                    'success' => false,
+                    'error' => 'OCR processing error: ' . $errorMessage
+                ];
+            }
+
+            // Extract text from all parsed results
+            $extractedText = '';
+            if (isset($result['ParsedResults']) && !empty($result['ParsedResults'])) {
+                foreach ($result['ParsedResults'] as $parseResult) {
+                    $parsedText = $parseResult['ParsedText'] ?? '';
+                    $extractedText .= $parsedText;
+                    
+                    Log::info("🔍 ParsedText: " . $parsedText);
+                    
+                    // Log additional details
+                    if (isset($parseResult['FileParseExitCode'])) {
+                        Log::info("🔍 FileParseExitCode: " . $parseResult['FileParseExitCode']);
+                    }
+                    if (isset($parseResult['ErrorMessage']) && !empty($parseResult['ErrorMessage'])) {
+                        Log::warning("⚠️ Parse Warning: " . $parseResult['ErrorMessage']);
+                    }
+                }
+            }
+
+            if (empty(trim($extractedText))) {
+                Log::warning("⚠️ OCR Warning: No text extracted");
+                return [
+                    'success' => false,
+                    'error' => 'No text could be extracted from the image'
+                ];
+            }
+
+            $cleanText = $this->cleanOcrText($extractedText);
+            
+            Log::info("✅ OCR Extracted clean text (" . strlen($cleanText) . " chars): " . $cleanText);
+
+            return [
+                'success' => true,
+                'text' => $cleanText,
+                'raw_response' => $result
+            ];
+
+        } catch (\Exception $e) {
+            Log::error("❌ OCR Request Exception: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    private function chooseBestResult($results)
+    {
+        // Choose result with most text content
+        $bestResult = $results[0];
+        $maxLength = strlen($bestResult['data']['text']);
+
+        foreach ($results as $result) {
+            $textLength = strlen($result['data']['text']);
+            if ($textLength > $maxLength) {
+                $maxLength = $textLength;
+                $bestResult = $result;
+            }
+        }
+
+        Log::info("🎯 Best result: Engine " . $bestResult['engine'] . " with " . $maxLength . " characters");
+        return $bestResult;
+    }
+
     private function cleanOcrText($text)
     {
-        // Remove excessive whitespace
-        $text = preg_replace('/\s+/', ' ', $text);
+        // More aggressive cleaning
+        $text = preg_replace('/\r\n|\r/', "\n", $text);
+        $text = preg_replace('/\n\s*\n/', "\n", $text);
+        $text = trim($text);
         
-        // Remove lines with too many special characters (likely noise)
         $lines = explode("\n", $text);
         $cleanLines = [];
         
         foreach ($lines as $line) {
             $line = trim($line);
-            if (empty($line)) continue;
-            
-            // Skip lines that are mostly special characters or very short
-            if (strlen($line) < 3) continue;
-            
-            // Count alphanumeric characters vs special characters
-            $alphanumeric = preg_match_all('/[a-zA-Z0-9]/', $line);
-            $total = strlen($line);
-            
-            // Keep line if it has reasonable amount of alphanumeric content
-            if ($alphanumeric / $total > 0.3) {
+            // Keep lines with at least 1 character (less restrictive)
+            if (strlen($line) >= 1) {
                 $cleanLines[] = $line;
             }
         }
         
         return implode("\n", $cleanLines);
-    }
-
-    /**
-     * Check if the text appears to be gibberish
-     */
-    private function isGibberish($text)
-    {
-        if (empty($text) || strlen($text) < 10) {
-            return true;
-        }
-        
-        // Count readable words vs total characters
-        $words = preg_split('/\s+/', $text);
-        $readableWords = 0;
-        
-        foreach ($words as $word) {
-            // Consider a word readable if it has reasonable length and character distribution
-            if (strlen($word) >= 2 && preg_match('/[a-zA-Z0-9]/', $word)) {
-                $readableWords++;
-            }
-        }
-        
-        // If less than 20% of words seem readable, consider it gibberish
-        return ($readableWords / count($words)) < 0.2;
-    }
-
-    /**
-     * Try different OCR settings as fallback
-     */
-    private function tryFallbackOcr($fullPath)
-    {
-        $psmModes = [4, 7, 8, 13]; // Different page segmentation modes
-        
-        foreach ($psmModes as $psm) {
-            try {
-                Log::info("Trying fallback OCR with PSM mode: " . $psm);
-                
-                $ocr = new TesseractOCR($fullPath);
-                $ocr->executable('C:\Program Files\Tesseract-OCR\tesseract.exe');
-                $ocr->psm($psm);
-                $ocr->lang('eng');
-                
-                $text = $ocr->run();
-                $cleanText = $this->cleanOcrText($text);
-                
-                if (!empty($cleanText) && !$this->isGibberish($cleanText)) {
-                    Log::info("Fallback OCR successful with PSM mode: " . $psm);
-                    return $cleanText;
-                }
-            } catch (\Exception $e) {
-                Log::warning("Fallback OCR failed with PSM {$psm}: " . $e->getMessage());
-                continue;
-            }
-        }
-        
-        return null;
     }
 }
