@@ -24,7 +24,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "extra": {
-      "API_BASE_URL": "http://your-laravel-backend-ip-or-domain/api"
+      "API_BASE_URL": "http://localhost:8000/api/login"
     },
     "plugins": [
       "expo-router",
