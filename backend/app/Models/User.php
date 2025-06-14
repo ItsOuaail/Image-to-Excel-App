@@ -35,8 +35,5 @@ class User extends Authenticatable
     {
         return $this->hasMany(Conversion::class);
     }
-    public function conversionTemplates()
-{
-    return $this->hasMany(ConversionTemplate::class);
-}
+
 }

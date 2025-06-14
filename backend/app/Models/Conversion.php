@@ -40,8 +40,4 @@ class Conversion extends Model
         return $this->belongsTo(User::class);
     }
     
-    public function template()
-    {
-        return $this->belongsTo(ConversionTemplate::class, 'template_id');
-    }
 }
