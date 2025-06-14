@@ -1,38 +1,79 @@
 <?php
-
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ExcelService
 {
-    public function createExcel(array $data, $filename = null)
+    public function createExcel($tableData)
     {
-        if (empty($data)) {
-            throw new \Exception('No data to export');
+        // Check if the table data is valid
+        if (empty($tableData)) {
+            Log::error("No data found to create Excel file.");
+            return null;
         }
 
-        $filename = $filename ?: 'table_' . uniqid() . '.xlsx';
+        Log::info("Creating Excel with table data: " . print_r($tableData, true));
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Fill data into the spreadsheet
-        $rowNumber = 1;
-        foreach ($data as $row) {
-            $columnLetter = 'A';
+        // Populate the spreadsheet with table data
+        $rowNum = 1;
+        foreach ($tableData as $row) {
+            $colNum = 1;
             foreach ($row as $cell) {
-                $sheet->setCellValue($columnLetter . $rowNumber, $cell);
-                $columnLetter++;
+                // Clean the cell content completely
+                $cleanCell = $this->cleanCellContent($cell);
+                
+                // Get cell reference
+                $cellRef = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colNum) . $rowNum;
+                
+                // The simplest approach: prepend apostrophe to force text mode
+                $textValue = "'" . $cleanCell;
+                $sheet->setCellValue($cellRef, $textValue);
+                
+                $colNum++;
             }
-            $rowNumber++;
+            $rowNum++;
         }
 
-        // Save the file to the public directory
-        $filePath = 'conversions/excel/' . $filename;
-        $writer = new Xlsx($spreadsheet);
-        $writer->save(storage_path('app/public/' . $filePath));
+        // Save the spreadsheet to storage
+        $fileName = 'conversions/' . uniqid() . '.xlsx';
+        $filePath = storage_path('app/public/' . $fileName);
 
-        return $filePath;
+        try {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save($filePath);
+            Log::info("Excel file saved successfully at: " . $filePath);
+            return $fileName;
+        } catch (\Exception $e) {
+            Log::error("Error saving Excel file: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Clean cell content to be Excel-safe
+     */
+    private function cleanCellContent($content)
+    {
+        // Convert to string
+        $content = (string) $content;
+        
+        // Remove line breaks and trim
+        $content = trim(str_replace(["\r", "\n", "\t"], " ", $content));
+        
+        // If empty, return empty
+        if (empty($content)) {
+            return '';
+        }
+        
+        // Remove any characters that might cause issues
+        $content = preg_replace('/[^\x20-\x7E]/', '', $content); // Keep only printable ASCII
+        
+        return $content;
     }
 }

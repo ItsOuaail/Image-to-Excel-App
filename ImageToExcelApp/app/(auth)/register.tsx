@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
@@ -13,62 +22,83 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const API_URL = 'http://10.0.2.2:8000/api/register'; // ↔ change selon ton cas
 
   const handleRegister = async () => {
-    // 1. Validation des champs d'entrée
+    /* --- validations --- */
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-      return; // Arrête la fonction si les champs sont vides
+      return Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
     }
-
     if (password !== confirmPassword) {
-      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
-      return; // Arrête la fonction si les mots de passe ne correspondent pas
+      return Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
     }
 
-    console.log("Tentative d'enregistrement avec les données :", { name, email, password });
-
+    setIsLoading(true);
     try {
-      // 2. Appel à l'API pour l'enregistrement
-      console.log("Envoi de la requête vers l'API...");
-      const response = await fetch('http://10.0.2.2:8000/api/register', {
+      console.log('[REGISTER] Envoi →', { name, email });
+
+      const res = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({
-          name: name,
-          email: email,
-          password: password,
-          password_confirmation: confirmPassword, // Envoi de la confirmation du mot de passe
+          name,
+          email,
+          password,
+          password_confirmation: confirmPassword,
         }),
       });
 
-      console.log("Réponse de l'API : ", response);
+      const isJson =
+        res.headers.get('content-type')?.includes('application/json');
+      const payload = isJson ? await res.json() : await res.text();
 
-      const data = await response.json();
-      console.log("Données reçues de l'API : ", data);
+      console.log('[REGISTER] status', res.status, 'payload', payload);
 
-      if (response.ok) {
-        // 3. Si l'enregistrement est réussi, affichage d'une alerte et redirection
-        Alert.alert('Succès', 'Votre compte a été créé avec succès ! Vous êtes maintenant connecté.');
-        router.replace('/(main)/dashboard'); // Redirige vers le tableau de bord
-      } else {
-        // 4. Si une erreur est renvoyée, afficher le message retourné par l'API
-        Alert.alert('Erreur d\'Inscription', data.message || 'Une erreur est survenue');
+      if (!res.ok) {
+        const msg =
+          (isJson && (payload.message || JSON.stringify(payload))) ||
+          payload ||
+          'Une erreur est survenue';
+        return Alert.alert('Erreur d’inscription', msg);
       }
-    } catch (error: any) {
-      // 5. Gestion des erreurs de requête (échec réseau, etc.)
-      console.error('Erreur d\'inscription :', error);
-      Alert.alert('Erreur d\'Inscription', error.message);
+
+      /* --- succès --- */
+      Alert.alert(
+        'Inscription réussie',
+        'Votre compte est créé, vous pouvez maintenant vous connecter.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(auth)/login'), // redirection login
+          },
+        ],
+      );
+    } catch (err: any) {
+      console.error('[REGISTER] Network error', err);
+      Alert.alert(
+        'Erreur réseau',
+        err.message ?? 'Network request failed. Vérifiez votre connexion.',
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleGoogleSignIn = () => Alert.alert('Google Sign-In', 'Implement Google OAuth');
-  const handleAppleSignIn = () => Alert.alert('Apple Sign-In', 'Implement Apple OAuth');
+  const handleGoogleSignIn = () =>
+    Alert.alert('Google Sign-In', 'Implement Google OAuth');
+  const handleAppleSignIn = () =>
+    Alert.alert('Apple Sign-In', 'Implement Apple OAuth');
 
+  /* ---------- UI ---------- */
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.headerTitle}>Create Account</Text>
         <Text style={styles.headerSubtitle}>
@@ -107,12 +137,16 @@ export default function RegisterScreen() {
         <CustomButton
           title="Sign up"
           onPress={handleRegister}
+          loading={isLoading}
           style={styles.signUpButton}
         />
 
-        <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.alreadyHaveAccount}>
+        <TouchableOpacity
+          onPress={() => router.replace('/(auth)/login')}
+          style={styles.alreadyHaveAccount}>
           <Text style={GlobalStyles.subtitle}>
-            Already have an account? <Text style={GlobalStyles.linkText}>Sign in</Text>
+            Already have an account?{' '}
+            <Text style={GlobalStyles.linkText}>Sign in</Text>
           </Text>
         </TouchableOpacity>
 
@@ -127,6 +161,7 @@ export default function RegisterScreen() {
     </KeyboardAvoidingView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

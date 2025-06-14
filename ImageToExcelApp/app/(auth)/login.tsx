@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
@@ -78,9 +80,11 @@ export default function LoginScreen() {
           placeholder="Email"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           value={email}
           onChangeText={setEmail}
           style={styles.inputSpacing}
+          editable={!isLoading}
         />
         <CustomInput
           placeholder="Password"
@@ -88,15 +92,24 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           style={styles.inputSpacing}
+          editable={!isLoading}
         />
 
-        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+        <TouchableOpacity 
+          onPress={handleForgotPassword} 
+          style={styles.forgotPassword}
+          disabled={isLoading}
+        >
           <Text style={GlobalStyles.linkText}>Forgot your password?</Text>
         </TouchableOpacity>
 
         <CustomButton title="Sign in" onPress={handleLogin} loading={isLoading} style={styles.signInButton} />
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={styles.createAccount}>
+        <TouchableOpacity 
+          onPress={() => router.push('/(auth)/register')} 
+          style={styles.createAccount}
+          disabled={isLoading}
+        >
           <Text style={GlobalStyles.subtitle}>
             Create new account? <Text style={GlobalStyles.linkText}>Sign up</Text>
           </Text>
@@ -108,6 +121,7 @@ export default function LoginScreen() {
           onGooglePress={handleGoogleSignIn}
           onApplePress={handleAppleSignIn}
           onFacebookPress={() => {}}
+          disabled={isLoading}
         />
       </ScrollView>
     </KeyboardAvoidingView>
