@@ -101,10 +101,15 @@ Route::get('/debug/download-excel/{id}', function ($id) {
 });
 
 // Protected routes (REQUIRE AUTH)
+
+
+// Add these routes to your routes/api.php
+
 Route::middleware('auth:sanctum')->group(function () {
     // Conversion routes
     Route::get('/conversions', [App\Http\Controllers\Api\ConversionController::class, 'index']);
     Route::post('/conversions', [App\Http\Controllers\Api\ConversionController::class, 'store']);
     Route::get('/conversions/{id}', [App\Http\Controllers\Api\ConversionController::class, 'show']);
+    Route::get('/conversions/{id}/download', [App\Http\Controllers\Api\ConversionController::class, 'download'])->name('api.conversions.download');
     Route::delete('/conversions/{id}', [App\Http\Controllers\Api\ConversionController::class, 'destroy']);
 });
