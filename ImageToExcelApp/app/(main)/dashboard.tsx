@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 import { GlobalStyles } from '../../styles/GlobalStyles';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,43 +8,49 @@ import { useImageToExcel } from '../../hooks/useImageToExcel';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, logout, isLoading: authLoading } = useAuth(); // Utiliser isLoading de useAuth pour le logout
+  const { user, logout, isLoading: authLoading } = useAuth();
+
   const {
-    isLoading,
     imageUri,
-    excelUrl,
+    conversionId,
+    isLoading,
+    error,
     pickImage,
     uploadImage,
-    downloadExcel,
     reset,
-    error,
   } = useImageToExcel();
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace('/'); // Rediriger vers l'écran de bienvenue/login après déconnexion
-    } catch (err: any) {
-      Alert.alert('Erreur de déconnexion', err.message || 'Impossible de se déconnecter.');
-    }
+    await logout();
+    router.replace('/');
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.welcomeText}>
-        Bienvenue, {user ? user.name : 'Utilisateur'} !
+        Bienvenue, {user?.name ?? 'Utilisateur'} !
       </Text>
       <Text style={styles.instructionText}>
         Sélectionnez une image pour la convertir en Excel.
       </Text>
 
+      {/* Aperçu de l’image sélectionnée */}
       {imageUri && (
         <View style={styles.imagePreviewContainer}>
-          <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="contain" />
-          <CustomButton title="Changer l'image" onPress={pickImage} style={styles.changeImageButton} />
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.imagePreview}
+            resizeMode="contain"
+          />
+          <CustomButton
+            title="Changer l'image"
+            onPress={pickImage}
+            style={styles.changeImageButton}
+          />
         </View>
       )}
 
+      {/* Bouton de sélection initial si aucune image */}
       {!imageUri && (
         <CustomButton
           title="Sélectionner une image"
@@ -54,25 +60,23 @@ export default function DashboardScreen() {
         />
       )}
 
+      {/* Bouton d’upload → conversion */}
       {imageUri && (
         <CustomButton
           title="Convertir en Excel"
           onPress={uploadImage}
           loading={isLoading}
-          disabled={!!excelUrl} // Désactiver si déjà converti
+          disabled={!!conversionId}
           style={styles.convertButton}
         />
       )}
 
-      {excelUrl && (
+      {/* Message + action une fois la conversion terminée */}
+      {conversionId && (
         <View style={styles.excelActionsContainer}>
-          <Text style={styles.excelReadyText}>Fichier Excel prêt !</Text>
-          <CustomButton
-            title="Télécharger & Ouvrir Excel"
-            onPress={downloadExcel}
-            loading={isLoading}
-            style={styles.downloadButton}
-          />
+          <Text style={styles.excelReadyText}>
+            Fichier ouvert dans Excel ✔️
+          </Text>
           <CustomButton
             title="Nouvelle conversion"
             onPress={reset}
@@ -84,6 +88,7 @@ export default function DashboardScreen() {
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
+      {/* Déconnexion */}
       <View style={styles.logoutContainer}>
         <CustomButton
           title="Déconnexion"
@@ -133,7 +138,7 @@ const styles = StyleSheet.create({
   },
   changeImageButton: {
     width: '70%',
-    backgroundColor: '#6c757d', // Grey button
+    backgroundColor: '#6c757d',
     height: 40,
   },
   selectImageButton: {
@@ -142,7 +147,7 @@ const styles = StyleSheet.create({
   },
   convertButton: {
     width: '80%',
-    backgroundColor: '#28a745', // Green for convert
+    backgroundColor: '#28a745',
     marginBottom: 20,
   },
   excelActionsContainer: {
@@ -150,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     padding: 15,
-    backgroundColor: '#e6ffe6', // Light green background
+    backgroundColor: '#e6ffe6',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#28a745',
@@ -161,19 +166,14 @@ const styles = StyleSheet.create({
     color: '#28a745',
     marginBottom: 15,
   },
-  downloadButton: {
-    width: '90%',
-    backgroundColor: '#17a2b8', // Info blue for download
-    marginBottom: 10,
-  },
   resetButton: {
     width: '90%',
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#dc3545', // Red border
+    borderColor: '#dc3545',
   },
   resetButtonText: {
-    color: '#dc3545', // Red text
+    color: '#dc3545',
   },
   errorText: {
     color: 'red',

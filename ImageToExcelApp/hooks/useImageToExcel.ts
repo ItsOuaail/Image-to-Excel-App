@@ -1,110 +1,159 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadImageForExcelConversion, downloadAndOpenExcel } from '../services/excelService';
-import { Alert } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface ImageToExcelResult {
-  isLoading: boolean;
-  imageUri: string | null;
-  excelUrl: string | null;
-  pickImage: () => Promise<void>;
-  uploadImage: () => Promise<void>;
-  downloadExcel: () => Promise<void>;
-  reset: () => void;
-  error: string | null;
-}
+const API_BASE_URL = 'http://10.0.2.2:8000/api';
+const POLL_DELAY   = 4000;   // 4 s
+const MAX_POLLS    = 45;     // ~3 min
 
-export const useImageToExcel = (): ImageToExcelResult => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [excelUrl, setExcelUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+/* --------------- utilitaire de téléchargement --------------- */
+const downloadConversion = async (conversionId: number) => {
+  const token = await AsyncStorage.getItem('authToken');
+  if (!token) throw new Error('Jeton d’authentification introuvable');
 
+  const url       = `${API_BASE_URL}/conversions/${conversionId}/download`;
+  const filename  = `conversion_${conversionId}.xlsx`;
+  const destPath  = FileSystem.documentDirectory + filename;
+
+  // ① Téléchargement
+  const { uri } = await FileSystem.downloadAsync(url, destPath, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  /* ---------------- Android ---------------- */
+  if (Platform.OS === 'android') {
+    // Expo 49+ : transforme file:// en content:// sharable
+    const contentUri = await FileSystem.getContentUriAsync(uri);
+
+    // ② Ouvre Excel / Office / WPS…
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data : contentUri,
+      type : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      flags: 1,                               // FLAG_GRANT_READ_URI_PERMISSION
+    });
+  }
+  /* ---------------- iOS -------------------- */
+  else {
+    await Sharing.shareAsync(uri);
+  }
+};
+
+
+/* -------------------- hook principal ------------------------ */
+export const useImageToExcel = () => {
+  const [imageUri, setImageUri]   = useState<string | null>(null);
+  const [convId,   setConvId]     = useState<number | null>(null);
+  const [isBusy,   setIsBusy]     = useState(false);
+  const [error,    setError]      = useState<string | null>(null);
+
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  /* ----------- Sélection d’image ----------- */
   const pickImage = async () => {
-    setError(null);
-    setExcelUrl(null); // Clear previous excel URL on new image pick
-    setIsLoading(true); // Indicate loading while picker is open (permissions, etc.)
+    reset();
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Autorisez l’accès à la galerie.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes   : ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect       : [4, 3],
+      quality      : 1,
+    });
+    if (!result.canceled) setImageUri(result.assets[0].uri);
+  };
+
+  /* ------------- Upload + polling ------------- */
+  const uploadImage = async () => {
+    if (!imageUri) return setError('Sélectionnez une image.');
+    setIsBusy(true); setError(null);
+
     try {
-      // Demander la permission d'accéder à la galerie de photos
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à votre galerie.');
-        setError('Permission d\'accès à la galerie refusée.');
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) throw new Error('Authentification requise.');
+
+      const ext  = imageUri.split('.').pop() || 'jpg';
+      const form = new FormData();
+      form.append('image', { uri: imageUri, name: `image.${ext}`, type: `image/${ext}` } as any);
+
+      const res   = await fetch(`${API_BASE_URL}/conversions`, {
+        method : 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body   : form,
+      });
+      const json  = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Erreur serveur');
+
+      pollStatus(json.id, token, 0);      // ▶️ lancement du polling
+    } catch (e: any) {
+      setError(e.message); setIsBusy(false);
+    }
+  };
+
+  /* --------------- polling récursif --------------- */
+  /* --------------- polling récursif --------------- */
+  const pollStatus = async (id: number, token: string, attempt: number) => {
+    try {
+      const res  = await fetch(`${API_BASE_URL}/conversions/${id}`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json();          // <-- toujours parser la réponse
+
+      /* -------- 1️⃣ fichier prêt -------- */
+      if (res.status === 200 && json?.data?.status === 'completed') {
+        setConvId(id);
+        await downloadConversion(id);         // 📥 ouvre automatiquement
+        Alert.alert('Succès', 'Le fichier Excel s’est ouvert.');
+        setIsBusy(false);
+        return;                               // stop le polling
+      }
+
+      /* -------- 2️⃣ encore en cours -------- */
+      if (res.status === 202) {
+        if (attempt >= MAX_POLLS)
+          throw new Error('Temps dépassé, réessayez plus tard.');
+        timerRef.current = setTimeout(
+          () => pollStatus(id, token, attempt + 1),
+          POLL_DELAY
+        );
         return;
       }
 
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, // Dépend de si vous voulez permettre l'édition
-        quality: 1, // Haute qualité
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
-        setError(null);
-      }
-    } catch (err: any) {
-      console.error("Erreur lors de la sélection de l'image:", err);
-      setError('Échec de la sélection de l\'image: ' + (err.message || ''));
-    } finally {
-      setIsLoading(false);
+      /* -------- 3️⃣ échec remonté -------- */
+      throw new Error(
+        json?.message || 'La conversion a échoué, veuillez réessayer.'
+      );
+    } catch (e: any) {
+      setError(e.message);
+      setIsBusy(false);
     }
   };
 
-  const uploadImage = async () => {
-    if (!imageUri) {
-      Alert.alert('Image manquante', 'Veuillez sélectionner une image d\'abord.');
-      setError('Aucune image sélectionnée.');
-      return;
-    }
 
-    setIsLoading(true);
-    setError(null);
-    setExcelUrl(null);
-
-    try {
-      // Générez un nom de fichier unique ou significatif
-      const filename = `image_to_convert_${Date.now()}.jpeg`; // Assurez-vous que l'extension correspond au type réel
-      const response = await uploadImageForExcelConversion(imageUri, filename);
-      setExcelUrl(response.excel_url);
-      Alert.alert('Succès', 'Image uploadée et convertie ! Le fichier Excel est prêt à être téléchargé.');
-    } catch (err: any) {
-      console.error("Erreur lors de l'upload:", err);
-      setError(err.message || 'Échec de l\'upload de l\'image.');
-      Alert.alert('Erreur', err.message || 'Échec de l\'upload de l\'image.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const downloadExcel = async () => {
-    if (!excelUrl) {
-      Alert.alert('Fichier introuvable', 'Aucun fichier Excel à télécharger.');
-      setError('Aucune URL Excel disponible.');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await downloadAndOpenExcel(excelUrl, 'converted_data.xlsx');
-      Alert.alert('Succès', 'Le fichier Excel a été téléchargé et ouvert.');
-    } catch (err: any) {
-      console.error("Erreur lors du téléchargement:", err);
-      setError(err.message || 'Échec du téléchargement du fichier Excel.');
-      Alert.alert('Erreur', err.message || 'Échec du téléchargement du fichier Excel.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  /* ----------------- reset & cleanup ----------------- */
   const reset = () => {
-    setImageUri(null);
-    setExcelUrl(null);
-    setError(null);
-    setIsLoading(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setImageUri(null); setConvId(null); setError(null); setIsBusy(false);
   };
 
-  return { isLoading, imageUri, excelUrl, pickImage, uploadImage, downloadExcel, reset, error };
+  useEffect(() => () => reset(), []);   // cleanup automatique au démontage
+
+  return {
+    imageUri,
+    conversionId : convId,
+    isLoading    : isBusy,
+    error,
+    pickImage,
+    uploadImage,
+    reset,            // plus besoin de downloadExcel ici
+  };
 };
