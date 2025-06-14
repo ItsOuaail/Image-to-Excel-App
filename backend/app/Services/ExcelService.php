@@ -4,7 +4,6 @@ namespace App\Services;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 class ExcelService
 {
@@ -16,90 +15,64 @@ class ExcelService
             return null;
         }
 
+        Log::info("Creating Excel with table data: " . print_r($tableData, true));
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Log the table data for debugging
-        Log::info("Table data structure: " . print_r($tableData, true));
-
         // Populate the spreadsheet with table data
-        foreach ($tableData as $rowIndex => $row) {
-            foreach ($row as $colIndex => $cell) {
-                // Sanitize the cell content to avoid formula errors
-                $sanitizedCell = $this->sanitizeCellContent($cell);
-
-                // Get the column letter for the current column
-                $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
-                $cellCoordinate = $columnLetter . ($rowIndex + 1);
-
-                // Log problematic cells for debugging
-                if ($rowIndex == 14) { // A15 row (0-indexed)
-                    Log::info("Setting cell {$cellCoordinate} with value: '{$sanitizedCell}'");
-                }
-
-                try {
-                    // First try to set as explicit string
-                    $sheet->setCellValueExplicit($cellCoordinate, $sanitizedCell, DataType::TYPE_STRING);
-                } catch (\Exception $e) {
-                    Log::warning("Failed to set cell {$cellCoordinate} as string, trying alternative method: " . $e->getMessage());
-                    // Fallback: use getCell and setValueExplicit separately
-                    $cellObj = $sheet->getCell($cellCoordinate);
-                    $cellObj->setValueExplicit($sanitizedCell, DataType::TYPE_STRING);
-                }
+        $rowNum = 1;
+        foreach ($tableData as $row) {
+            $colNum = 1;
+            foreach ($row as $cell) {
+                // Clean the cell content completely
+                $cleanCell = $this->cleanCellContent($cell);
+                
+                // Get cell reference
+                $cellRef = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colNum) . $rowNum;
+                
+                // The simplest approach: prepend apostrophe to force text mode
+                $textValue = "'" . $cleanCell;
+                $sheet->setCellValue($cellRef, $textValue);
+                
+                $colNum++;
             }
+            $rowNum++;
         }
 
         // Save the spreadsheet to storage
         $fileName = 'conversions/' . uniqid() . '.xlsx';
-        $writer = new Xlsx($spreadsheet);
         $filePath = storage_path('app/public/' . $fileName);
 
         try {
+            $writer = new Xlsx($spreadsheet);
             $writer->save($filePath);
             Log::info("Excel file saved successfully at: " . $filePath);
+            return $fileName;
         } catch (\Exception $e) {
             Log::error("Error saving Excel file: " . $e->getMessage());
             return null;
         }
-
-        return $fileName; // Return relative path for storage
     }
 
     /**
-     * Sanitize cell content to avoid formula errors
-     * 
-     * @param string $content
-     * @return string
+     * Clean cell content to be Excel-safe
      */
-    private function sanitizeCellContent($content)
+    private function cleanCellContent($content)
     {
-        // Convert to string if not already
-        if (!is_string($content)) {
-            $content = (string) $content;
-        }
-
-        // Trim whitespace
-        $content = trim($content);
-
-        // If empty, return empty string
+        // Convert to string
+        $content = (string) $content;
+        
+        // Remove line breaks and trim
+        $content = trim(str_replace(["\r", "\n", "\t"], " ", $content));
+        
+        // If empty, return empty
         if (empty($content)) {
             return '';
         }
-
-        // More aggressive sanitization for Excel formula prevention
-        // Replace any equals signs that could be interpreted as formulas
-        $content = str_replace('=', '= ', $content);
         
-        // Remove or replace other problematic characters
-        $content = str_replace(['"', "'", '`'], '', $content);
-        
-        // Replace any remaining formula indicators with text equivalents
-        $content = preg_replace('/^[\+\-@]/', ' $0', $content);
-        
-        // Ensure content doesn't start with problematic characters
-        if (preg_match('/^[=+\-@]/', $content)) {
-            $content = 'TEXT: ' . $content;
-        }
+        // Remove any characters that might cause issues
+        $content = preg_replace('/[^\x20-\x7E]/', '', $content); // Keep only printable ASCII
         
         return $content;
     }
