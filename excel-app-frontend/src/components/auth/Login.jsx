@@ -21,17 +21,21 @@ const Login = ({ onSwitchToRegister }) => {
   });
 
   const onSubmit = async (data) => {
-    setIsLoading(true);
-    setError('');
+  setIsLoading(true);
+  setError('');
 
+  try {
     const result = await login(data.email, data.password);
     
     if (!result.success) {
-      setError(result.error);
+      setError(result.error || 'Login failed');
     }
-    
+  } catch (error) {
+    setError('An unexpected error occurred');
+  } finally {
     setIsLoading(false);
-  };
+  }
+};
 
   return (
     <div className="w-full max-w-md mx-auto">

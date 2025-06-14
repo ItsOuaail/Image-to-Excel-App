@@ -5,6 +5,7 @@ import { Eye, EyeOff, Mail, Lock, User, UserPlus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { registerSchema } from '../../utils/validationSchemas';
 import LoadingSpinner from '../LoadingSpinner';
+import { getCsrfToken } from '../../config/api';
 
 const Register = ({ onSwitchToLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -24,24 +25,31 @@ const Register = ({ onSwitchToLogin }) => {
   });
 
   const onSubmit = async (data) => {
-    setIsLoading(true);
-    setError('');
-    setSuccess(false);
+  console.log('Form submitted with data:', data);
+  setIsLoading(true);
+  setError('');
+  setSuccess(false);
 
+  try {
     const result = await registerUser(data);
-    
-    if (result.success) {
+
+    // Handle both success and error cases
+    if (result?.success) {
       setSuccess(true);
       reset();
       setTimeout(() => {
         onSwitchToLogin();
       }, 2000);
     } else {
-      setError(result.error);
+      setError(result?.error || 'Registration failed.');
     }
-    
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    setError('An unexpected error occurred.');
+  } finally {
     setIsLoading(false);
-  };
+  }
+};
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -137,7 +145,7 @@ const Register = ({ onSwitchToLogin }) => {
             <div className="relative">
               <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
               <input
-                {...register('passwordConfirmation')}
+                {...register('password_confirmation')}
                 type={showPasswordConfirmation ? 'text' : 'password'}
                 className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Confirm your password"
@@ -150,8 +158,8 @@ const Register = ({ onSwitchToLogin }) => {
                 {showPasswordConfirmation ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            {errors.passwordConfirmation && (
-              <p className="text-red-500 text-sm mt-1">{errors.passwordConfirmation.message}</p>
+            {errors.password_confirmation && (
+              <p className="text-red-500 text-sm mt-1">{errors.password_confirmation.message}</p>
             )}
           </div>
 
