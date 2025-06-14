@@ -3,46 +3,73 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, 
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
-import { GlobalStyles }  from '../../styles/GlobalStyles';
+import { GlobalStyles } from '../../styles/GlobalStyles';
 import { useRouter } from 'expo-router';
-// import { useAuth } from '../../hooks/useAuth'; // Nous allons désactiver l'importation de useAuth temporairement pour éviter des erreurs si non configuré
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen() {
   const router = useRouter();
-  // const { login, isLoading } = useAuth(); // Désactiver ou commenter ceci pour le test temporaire
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- MODIFICATION ICI ---
+  /** ⚡ Met ton URL dans une constante pour la logguer facilement */
+  const API_URL = 'http://10.0.2.2:8000/api/login';   // ← change-la si besoin
+
   const handleLogin = async () => {
-    // Supprimez ou commentez la logique de validation et d'appel API pour le test rapide
-    // if (!email || !password) {
-    //   Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-    //   return;
-    // }
-    // try {
-    //   await login(email, password); // Ceci ne sera pas appelé
-    //   Alert.alert('Info', 'Connexion simulée réussie !'); // Message pour confirmer la simulation
-      router.replace('/(main)/dashboard'); // Redirige directement vers le tableau de bord
-    // } catch (error: any) {
-    //   Alert.alert('Erreur de Connexion', error);
-    // }
-  };
-  // --- FIN DE LA MODIFICATION ---
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      return;
+    }
 
-  const handleForgotPassword = () => {
-    Alert.alert('Mot de passe oublié', 'Fonctionnalité à implémenter.');
+    setIsLoading(true);
+
+    try {
+      /* ---- Avant l’envoi ---- */
+      console.log('[LOGIN] Envoi vers', API_URL, { email, password });
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      /* ---- Après réception HTTP ---- */
+      console.log('[LOGIN] Status HTTP =>', response.status);
+
+      let data: any;
+      try {
+        data = await response.json();
+        console.log('[LOGIN] Payload JSON =>', data);
+      } catch (jsonErr) {
+        console.warn('[LOGIN] Impossible de parser le JSON :', jsonErr);
+      }
+
+      if (response.ok) {
+        await AsyncStorage.setItem('authToken', data.token);
+        console.log('[LOGIN] Token stocké OK');
+        Alert.alert('Succès', 'Connexion réussie !');
+        router.replace('/(main)/dashboard');
+      } else {
+        console.warn('[LOGIN] Erreur renvoyée par l’API :', data?.message);
+        Alert.alert('Erreur de Connexion', data?.message ?? 'Une erreur est survenue');
+      }
+    } catch (err: any) {
+      /* ---- Erreur réseau ou fetch ---- */
+      console.error('[LOGIN] Network / Fetch error =>', err);
+      Alert.alert('Erreur de Connexion', err.message ?? 'Network request failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  /* ----- UI inchangée ----- */
+  const handleForgotPassword = () => Alert.alert('Mot de passe oublié', 'Fonctionnalité à implémenter.');
   const handleGoogleSignIn = () => Alert.alert('Google Sign-In', 'Implement Google OAuth');
   const handleAppleSignIn = () => Alert.alert('Apple Sign-In', 'Implement Apple OAuth');
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.headerTitle}>Login here</Text>
         <Text style={styles.headerSubtitle}>Welcome back you've been missed!</Text>
@@ -67,12 +94,7 @@ export default function LoginScreen() {
           <Text style={GlobalStyles.linkText}>Forgot your password?</Text>
         </TouchableOpacity>
 
-        <CustomButton
-          title="Sign in"
-          onPress={handleLogin}
-          // loading={isLoading} // Commentez ou supprimez cette prop car isLoading n'est pas utilisé
-          style={styles.signInButton}
-        />
+        <CustomButton title="Sign in" onPress={handleLogin} loading={isLoading} style={styles.signInButton} />
 
         <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={styles.createAccount}>
           <Text style={GlobalStyles.subtitle}>
@@ -92,6 +114,7 @@ export default function LoginScreen() {
   );
 }
 
+// Styles pour le composant
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,

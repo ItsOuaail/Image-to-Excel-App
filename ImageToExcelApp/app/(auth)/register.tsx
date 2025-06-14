@@ -5,33 +5,62 @@ import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
 import { GlobalStyles } from '../../styles/GlobalStyles';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../hooks/useAuth';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { register, isLoading } = useAuth();
 
-  const [name, setName] = useState(''); // Assuming your Laravel backend registers with a name
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleRegister = async () => {
+    // 1. Validation des champs d'entrée
     if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-      return;
+      return; // Arrête la fonction si les champs sont vides
     }
+
     if (password !== confirmPassword) {
       Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
-      return;
+      return; // Arrête la fonction si les mots de passe ne correspondent pas
     }
+
+    console.log("Tentative d'enregistrement avec les données :", { name, email, password });
+
     try {
-      await register(name, email, password, confirmPassword);
-      // Registration successful, redirect to authenticated area
-      Alert.alert('Succès', 'Votre compte a été créé avec succès ! Vous êtes maintenant connecté.');
-      router.replace('/(main)/dashboard'); // Redirect to your main app screen
+      // 2. Appel à l'API pour l'enregistrement
+      console.log("Envoi de la requête vers l'API...");
+      const response = await fetch('http://10.0.2.2:8000/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+          password: password,
+          password_confirmation: confirmPassword, // Envoi de la confirmation du mot de passe
+        }),
+      });
+
+      console.log("Réponse de l'API : ", response);
+
+      const data = await response.json();
+      console.log("Données reçues de l'API : ", data);
+
+      if (response.ok) {
+        // 3. Si l'enregistrement est réussi, affichage d'une alerte et redirection
+        Alert.alert('Succès', 'Votre compte a été créé avec succès ! Vous êtes maintenant connecté.');
+        router.replace('/(main)/dashboard'); // Redirige vers le tableau de bord
+      } else {
+        // 4. Si une erreur est renvoyée, afficher le message retourné par l'API
+        Alert.alert('Erreur d\'Inscription', data.message || 'Une erreur est survenue');
+      }
     } catch (error: any) {
-      Alert.alert('Erreur d\'Inscription', error);
+      // 5. Gestion des erreurs de requête (échec réseau, etc.)
+      console.error('Erreur d\'inscription :', error);
+      Alert.alert('Erreur d\'Inscription', error.message);
     }
   };
 
@@ -39,10 +68,7 @@ export default function RegisterScreen() {
   const handleAppleSignIn = () => Alert.alert('Apple Sign-In', 'Implement Apple OAuth');
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.headerTitle}>Create Account</Text>
         <Text style={styles.headerSubtitle}>
@@ -81,7 +107,6 @@ export default function RegisterScreen() {
         <CustomButton
           title="Sign up"
           onPress={handleRegister}
-          loading={isLoading}
           style={styles.signUpButton}
         />
 
@@ -96,7 +121,7 @@ export default function RegisterScreen() {
         <SocialSignInButtons
           onGooglePress={handleGoogleSignIn}
           onApplePress={handleAppleSignIn}
-          onFacebookPress={() => {}} // Placeholder if you add Facebook
+          onFacebookPress={() => {}}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -130,7 +155,7 @@ const styles = StyleSheet.create({
   signUpButton: {
     width: '100%',
     marginBottom: 20,
-    marginTop: 20, // Add some space before the button
+    marginTop: 20,
   },
   alreadyHaveAccount: {
     marginTop: 10,
