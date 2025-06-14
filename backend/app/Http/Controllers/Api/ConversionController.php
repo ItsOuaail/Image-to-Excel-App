@@ -54,7 +54,7 @@ class ConversionController extends Controller
             'original_filename' => $image->getClientOriginalName(),
             'image_path' => $path,
             'status' => 'pending',
-            'extracted_data' => $rawText // FIX: Actually save the OCR text
+           'extracted_data' => json_encode(['ocr_text' => $rawText])
         ]);
 
         Log::info("📋 Conversion record created with ID: " . $conversion->id);
