@@ -27,7 +27,6 @@
       "API_BASE_URL": "http://your-laravel-backend-ip-or-domain/api"
     },
     "plugins": [
-
       "expo-router",
       [
         "expo-splash-screen",
@@ -37,7 +36,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

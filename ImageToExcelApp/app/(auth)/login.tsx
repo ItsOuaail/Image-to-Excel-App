@@ -1,35 +1,131 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import SocialSignInButtons from '../../components/SocialSignInButtons';
-import { GlobalStyles }  from '../../styles/GlobalStyles';
+import { GlobalStyles } from '../../styles/GlobalStyles';
 import { useRouter } from 'expo-router';
-// import { useAuth } from '../../hooks/useAuth'; // Nous allons désactiver l'importation de useAuth temporairement pour éviter des erreurs si non configuré
+
+// Configuration de l'URL de base pour axios
+const getApiBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  
+  // Configuration par défaut selon la plateforme
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000'; // Émulateur Android
+  } else {
+    return 'http://localhost:8000'; // iOS Simulator
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export default function LoginScreen() {
   const router = useRouter();
-  // const { login, isLoading } = useAuth(); // Désactiver ou commenter ceci pour le test temporaire
-
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- MODIFICATION ICI ---
   const handleLogin = async () => {
-    // Supprimez ou commentez la logique de validation et d'appel API pour le test rapide
-    // if (!email || !password) {
-    //   Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-    //   return;
-    // }
-    // try {
-    //   await login(email, password); // Ceci ne sera pas appelé
-    //   Alert.alert('Info', 'Connexion simulée réussie !'); // Message pour confirmer la simulation
-      router.replace('/(main)/dashboard'); // Redirige directement vers le tableau de bord
-    // } catch (error: any) {
-    //   Alert.alert('Erreur de Connexion', error);
-    // }
+    // Validation des champs
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      return;
+    }
+
+    // Validation de l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Log pour déboguer l'URL utilisée
+      console.log('Tentative de connexion à:', `${API_BASE_URL}/api/login`);
+      
+      // Requête POST vers l'API de connexion
+      const response = await axios.post(`${API_BASE_URL}/api/login`, {
+        email: email.toLowerCase().trim(),
+        password: password,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        timeout: 10000, // Timeout de 10 secondes
+      });
+
+      // Vérification de la réponse
+      if (response.data && response.data.token) {
+        const { token, user, message } = response.data;
+
+        // Stockage sécurisé du token
+        await SecureStore.setItemAsync('userToken', token);
+        
+        // Optionnel : stocker les informations utilisateur
+        await SecureStore.setItemAsync('userData', JSON.stringify(user));
+
+        // Afficher un message de succès
+        Alert.alert('Succès', message || 'Connexion réussie !', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Redirection vers le tableau de bord
+              router.replace('/(main)/dashboard');
+            }
+          }
+        ]);
+      } else {
+        throw new Error('Réponse invalide du serveur');
+      }
+
+    } catch (error: any) {
+      console.error('Erreur de connexion:', error);
+      
+      let errorMessage = 'Une erreur est survenue lors de la connexion.';
+      
+      if (error.response) {
+        // Erreur de réponse du serveur
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        switch (status) {
+          case 401:
+            errorMessage = 'Email ou mot de passe incorrect.';
+            break;
+          case 422:
+            errorMessage = data.message || 'Données de connexion invalides.';
+            break;
+          case 429:
+            errorMessage = 'Trop de tentatives de connexion. Veuillez réessayer plus tard.';
+            break;
+          case 500:
+            errorMessage = 'Erreur du serveur. Veuillez réessayer plus tard.';
+            break;
+          default:
+            errorMessage = data.message || errorMessage;
+        }
+      } else if (error.request) {
+        // Erreur de réseau
+        errorMessage = 'Impossible de se connecter au serveur. Vérifiez votre connexion internet.';
+      } else if (error.code === 'ECONNABORTED') {
+        // Timeout
+        errorMessage = 'La connexion a pris trop de temps. Veuillez réessayer.';
+      }
+
+      Alert.alert('Erreur de Connexion', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
-  // --- FIN DE LA MODIFICATION ---
 
   const handleForgotPassword = () => {
     Alert.alert('Mot de passe oublié', 'Fonctionnalité à implémenter.');
@@ -51,9 +147,11 @@ export default function LoginScreen() {
           placeholder="Email"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           value={email}
           onChangeText={setEmail}
           style={styles.inputSpacing}
+          editable={!isLoading}
         />
         <CustomInput
           placeholder="Password"
@@ -61,20 +159,30 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           style={styles.inputSpacing}
+          editable={!isLoading}
         />
 
-        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+        <TouchableOpacity 
+          onPress={handleForgotPassword} 
+          style={styles.forgotPassword}
+          disabled={isLoading}
+        >
           <Text style={GlobalStyles.linkText}>Forgot your password?</Text>
         </TouchableOpacity>
 
         <CustomButton
           title="Sign in"
           onPress={handleLogin}
-          // loading={isLoading} // Commentez ou supprimez cette prop car isLoading n'est pas utilisé
+          loading={isLoading}
           style={styles.signInButton}
+          disabled={isLoading}
         />
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={styles.createAccount}>
+        <TouchableOpacity 
+          onPress={() => router.push('/(auth)/register')} 
+          style={styles.createAccount}
+          disabled={isLoading}
+        >
           <Text style={GlobalStyles.subtitle}>
             Create new account? <Text style={GlobalStyles.linkText}>Sign up</Text>
           </Text>
@@ -86,6 +194,7 @@ export default function LoginScreen() {
           onGooglePress={handleGoogleSignIn}
           onApplePress={handleAppleSignIn}
           onFacebookPress={() => {}}
+          disabled={isLoading}
         />
       </ScrollView>
     </KeyboardAvoidingView>
