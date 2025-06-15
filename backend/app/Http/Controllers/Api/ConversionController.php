@@ -20,7 +20,7 @@ class ConversionController extends Controller
     public function store(Request $request)
     {
         Log::info("🚀 TABLE CONVERSION: New request received");
-        
+
         $request->validate([
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:10240'
         ]);
@@ -284,18 +284,18 @@ $conversion = $user->conversions()->find($id);
     {
         // Remove file extension from original name
         $nameWithoutExt = pathinfo($originalName, PATHINFO_FILENAME);
-        
+
         // Clean the filename (remove special characters)
         $cleanName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $nameWithoutExt);
-        
+
         // Ensure it's not empty
         if (empty($cleanName)) {
             $cleanName = 'converted_table';
         }
-        
+
         // Add timestamp to make it unique
         $timestamp = date('Y-m-d_H-i-s');
-        
+
         return $cleanName . '_' . $timestamp . '.xlsx';
     }
 

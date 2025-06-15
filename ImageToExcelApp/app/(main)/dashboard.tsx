@@ -1,82 +1,110 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, Alert, ScrollView } from 'react-native';
-import CustomButton from '../../components/CustomButton';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import CustomButton from '../../components/CustomButton'; // Assuming CustomButton can handle style overrides
 import { GlobalStyles } from '../../styles/GlobalStyles';
 import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'expo-router';
 import { useImageToExcel } from '../../hooks/useImageToExcel';
 
+// Simple icon component for placeholders, you can replace with a real icon library
+const Icon = ({ name, color }) => (
+  <Text style={{ color, fontSize: 40, marginBottom: 10 }}>
+    {name === 'image' ? '🖼️' : '✔️'}
+  </Text>
+);
+
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, logout, isLoading: authLoading } = useAuth(); // Utiliser isLoading de useAuth pour le logout
+  const { user, logout, isLoading: authLoading } = useAuth();
+
   const {
-    isLoading,
     imageUri,
-    excelUrl,
+    conversionId,
+    isLoading,
+    error,
     pickImage,
     uploadImage,
-    downloadExcel,
     reset,
-    error,
   } = useImageToExcel();
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace('/'); // Rediriger vers l'écran de bienvenue/login après déconnexion
-    } catch (err: any) {
-      Alert.alert('Erreur de déconnexion', err.message || 'Impossible de se déconnecter.');
-    }
+    await logout();
+    router.replace('/');
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.welcomeText}>
-        Bienvenue, {user ? user.name : 'Utilisateur'} !
-      </Text>
-      <Text style={styles.instructionText}>
-        Sélectionnez une image pour la convertir en Excel.
-      </Text>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}>
+        <Text style={styles.welcomeText}>
+          Bienvenue, {user?.name ?? 'Utilisateur'}!
+        </Text>
+        <Text style={styles.instructionText}>
+          Commencez par sélectionner une image à convertir.
+        </Text>
+      </View>
+
+      {/* --- Image Selection Area --- */}
+      {!imageUri && (
+        <TouchableOpacity onPress={pickImage} style={styles.imagePlaceholder} disabled={isLoading}>
+          <Icon name="image" color="#a0aec0" />
+          <Text style={styles.placeholderText}>Appuyez pour choisir une image</Text>
+        </TouchableOpacity>
+      )}
 
       {imageUri && (
         <View style={styles.imagePreviewContainer}>
-          <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="contain" />
-          <CustomButton title="Changer l'image" onPress={pickImage} style={styles.changeImageButton} />
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.imagePreview}
+            resizeMode="contain"
+          />
         </View>
       )}
 
-      {!imageUri && (
-        <CustomButton
-          title="Sélectionner une image"
-          onPress={pickImage}
-          loading={isLoading}
-          style={styles.selectImageButton}
-        />
-      )}
+      {/* --- Action Buttons Area --- */}
+      <View style={styles.actionsContainer}>
+        {imageUri && !conversionId && (
+            <>
+                <CustomButton
+                    title="Convertir en Excel"
+                    onPress={uploadImage}
+                    loading={isLoading}
+                    style={[styles.button, styles.convertButton]}
+                    textStyle={styles.buttonTextPrimary}
+                />
+                <CustomButton
+                    title="Changer d'image"
+                    onPress={pickImage}
+                    style={[styles.button, styles.changeImageButton]}
+                    textStyle={styles.buttonTextSecondary}
+                />
+            </>
+        )}
 
-      {imageUri && (
-        <CustomButton
-          title="Convertir en Excel"
-          onPress={uploadImage}
-          loading={isLoading}
-          disabled={!!excelUrl} // Désactiver si déjà converti
-          style={styles.convertButton}
-        />
-      )}
+        {!imageUri && (
+           <CustomButton
+                title="Sélectionner une image"
+                onPress={pickImage}
+                loading={isLoading}
+                style={[styles.button, styles.selectImageButton]}
+                textStyle={styles.buttonTextPrimary}
+            />
+        )}
+      </View>
 
-      {excelUrl && (
-        <View style={styles.excelActionsContainer}>
-          <Text style={styles.excelReadyText}>Fichier Excel prêt !</Text>
+      {/* --- Success Message --- */}
+      {conversionId && (
+        <View style={styles.successContainer}>
+          <Icon name="check" color="#38a169" />
+          <Text style={styles.successTitle}>Conversion Réussie !</Text>
+          <Text style={styles.successSubtitle}>Votre fichier est prêt.</Text>
           <CustomButton
-            title="Télécharger & Ouvrir Excel"
-            onPress={downloadExcel}
-            loading={isLoading}
-            style={styles.downloadButton}
-          />
-          <CustomButton
-            title="Nouvelle conversion"
+            title="Effectuer une nouvelle conversion"
             onPress={reset}
-            style={styles.resetButton}
+            style={[styles.button, styles.resetButton]}
             textStyle={styles.resetButtonText}
           />
         </View>
@@ -84,12 +112,13 @@ export default function DashboardScreen() {
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
+      {/* --- Logout Section --- */}
       <View style={styles.logoutContainer}>
         <CustomButton
           title="Déconnexion"
           onPress={handleLogout}
           loading={authLoading}
-          style={styles.logoutButton}
+          style={[styles.button, styles.logoutButton]}
           textStyle={styles.logoutButtonText}
         />
       </View>
@@ -100,98 +129,160 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 20,
+    padding: 24,
+    backgroundColor: '#F7F9FC', // A soft, light grey background
+  },
+  header: {
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    marginBottom: 32,
   },
   welcomeText: {
-    ...GlobalStyles.title,
-    fontSize: 24,
-    marginBottom: 10,
+    // Assuming GlobalStyles.title exists, otherwise define it
+    // ...GlobalStyles.title,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1A202C', // Darker text for better contrast
     textAlign: 'center',
   },
   instructionText: {
-    ...GlobalStyles.subtitle,
+    // ...GlobalStyles.subtitle,
     fontSize: 16,
-    marginBottom: 30,
+    color: '#718096', // Softer color for secondary text
     textAlign: 'center',
+    marginTop: 8,
+  },
+  // --- Image Styles ---
+  imagePlaceholder: {
+    height: 200,
+    width: '100%',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  placeholderText: {
+    color: '#a0aec0',
+    fontSize: 16,
+    fontWeight: '500',
   },
   imagePreviewContainer: {
     width: '100%',
+    height: 250,
+    marginBottom: 24,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    padding: 8,
     alignItems: 'center',
-    marginBottom: 20,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 10,
-    padding: 10,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
   imagePreview: {
-    width: '90%',
-    height: 200,
-    borderRadius: 8,
-    backgroundColor: '#ccc',
-    marginBottom: 10,
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
   },
-  changeImageButton: {
-    width: '70%',
-    backgroundColor: '#6c757d', // Grey button
-    height: 40,
+  // --- Button Styles ---
+  actionsContainer: {
+      width: '100%',
+  },
+  button: {
+    width: '100%',
+    height: 52,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 12,
+  },
+  buttonTextPrimary: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+   buttonTextSecondary: {
+    color: '#4A5568',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   selectImageButton: {
-    width: '80%',
-    marginBottom: 20,
+      backgroundColor: '#3182CE', // A nice, professional blue
   },
   convertButton: {
-    width: '80%',
-    backgroundColor: '#28a745', // Green for convert
+    backgroundColor: '#38A169', // A clear, success green
+  },
+  changeImageButton: {
+      backgroundColor: '#EDF2F7',
+  },
+  // --- Success State ---
+  successContainer: {
+    width: '100%',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F0FFF4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#9AE6B4',
+    marginTop: 16,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2F855A',
+    marginBottom: 4,
+  },
+  successSubtitle: {
+    fontSize: 16,
+    color: '#2F855A',
     marginBottom: 20,
   },
-  excelActionsContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 20,
-    padding: 15,
-    backgroundColor: '#e6ffe6', // Light green background
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#28a745',
-  },
-  excelReadyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#28a745',
-    marginBottom: 15,
-  },
-  downloadButton: {
-    width: '90%',
-    backgroundColor: '#17a2b8', // Info blue for download
-    marginBottom: 10,
-  },
   resetButton: {
-    width: '90%',
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#dc3545', // Red border
+    borderWidth: 1.5,
+    borderColor: '#38A169',
+    shadowOpacity: 0, // No shadow for outline buttons
+    elevation: 0,
   },
   resetButtonText: {
-    color: '#dc3545', // Red text
+    color: '#38A169',
+    fontWeight: 'bold',
   },
+  // --- Other Styles ---
   errorText: {
-    color: 'red',
-    marginTop: 15,
+    color: '#E53E3E',
+    marginTop: 20,
     textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
   },
   logoutContainer: {
-    marginTop: 40,
+    marginTop: 32, // More space before logout
     width: '100%',
     alignItems: 'center',
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderColor: '#E2E8F0',
   },
   logoutButton: {
-    width: '50%',
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#dc3545',
+    borderWidth: 1.5,
+    borderColor: '#E53E3E',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   logoutButtonText: {
-    color: '#dc3545',
+    color: '#E53E3E',
+    fontWeight: 'bold',
   },
 });
