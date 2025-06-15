@@ -54,7 +54,7 @@ class ConversionController extends Controller
             'original_filename' => $image->getClientOriginalName(),
             'image_path' => $path,
             'status' => 'pending',
-            'extracted_data' => $rawText
+            'extracted_data' => json_encode(['ocr_text' => $rawText])
         ]);
 
         Log::info("📋 Conversion record created with ID: " . $conversion->id);
@@ -86,7 +86,11 @@ class ConversionController extends Controller
     {
         Log::info("📥 Show conversion request for ID: {$id}");
 
-        $conversion = $request->user()->conversions()->find($id);
+        $user = $request->user();
+if (!$user) {
+    return response()->json(['error' => 'Unauthorized'], 401);
+}
+$conversion = $user->conversions()->find($id);
 
         if (!$conversion) {
             Log::error("❌ Conversion not found: {$id}");
@@ -187,7 +191,11 @@ class ConversionController extends Controller
     {
         Log::info("📥 Force download request for conversion ID: {$id}");
 
-        $conversion = $request->user()->conversions()->find($id);
+        $user = $request->user();
+if (!$user) {
+    return response()->json(['error' => 'Unauthorized'], 401);
+}
+$conversion = $user->conversions()->find($id);
 
         if (!$conversion) {
             Log::error("❌ Conversion not found: {$id}");
@@ -310,7 +318,11 @@ class ConversionController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        $conversion = $request->user()->conversions()->find($id);
+        $user = $request->user();
+if (!$user) {
+    return response()->json(['error' => 'Unauthorized'], 401);
+}
+$conversion = $user->conversions()->find($id);
 
         if (!$conversion) {
             return response()->json(['message' => 'Conversion not found'], 404);
