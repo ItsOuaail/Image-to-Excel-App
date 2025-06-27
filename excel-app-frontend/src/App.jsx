@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -5,6 +6,7 @@ import Layout from './components/Layout';
 import Navigation from './components/Navigation';
 import ImageToExcel from './components/ImageToExcel';
 import ExcelMerger from './components/ExcelMerger';
+import MyFichiersExcel from './components/MyFichiersExcel';
 import { getCsrfToken } from './config/api';
 
 import './index.css';
@@ -25,6 +27,8 @@ function App() {
         return <ImageToExcel />;
       case 'merge-excel':
         return <ExcelMerger />;
+      case 'my-fichiers-excel':
+        return <MyFichiersExcel />;
       default:
         return <ImageToExcel />;
     }

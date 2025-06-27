@@ -1,10 +1,11 @@
 import React from 'react';
-import { Image, FileSpreadsheet } from 'lucide-react';
+import { Image, FileSpreadsheet, Table } from 'lucide-react';
 
 const Navigation = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'image-to-excel', label: 'Image to Excel', icon: Image },
     { id: 'merge-excel', label: 'Merge Excel', icon: FileSpreadsheet },
+    { id: 'my-fichiers-excel', label: 'My Fichiers Excel', icon: Table },
   ];
 
   return (
